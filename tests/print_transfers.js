@@ -25,23 +25,23 @@ server.on('fork', function(data) {
 
 server.on('tx', function(data) {
     let tx_printed = false;
-    
-    for(let i=0; i< data.trace.action_traces.length; i++) {
-        let trace = data.trace.action_traces[i];
-        if(trace.receipt.receiver == trace.act.account) {
-            if(trace.act.name == 'transfer') {
-                if(!tx_printed) {
-                    console.log('tx: ' + data.trace.id);
-                    tx_printed = true;
-                }
-
-                let d = trace.act.data;
-                
-                console.log(' ' + trace.act.account + ' ' +
-                            d.from + '->' +
-                            d.to + ': ' +
-                            d.quantity);
-            }           
+    let trace = data.trace;
+    if(trace.status == 'executed') {
+        for(let i=0; i< trace.action_traces.length; i++) {
+            let atrace = trace.action_traces[i];
+            if(atrace.receipt.receiver == atrace.act.account) {
+                if(atrace.act.name == 'transfer') {
+                    if(!tx_printed) {
+                        console.log('tx: ' + trace.id);
+                        tx_printed = true;
+                    }
+                    let d = atrace.act.data;
+                    console.log(' ' + atrace.act.account + ' ' +
+                                d.from + '->' +
+                                d.to + ': ' +
+                                d.quantity);
+                }           
+            }
         }
     }
 });
@@ -69,3 +69,5 @@ server.on('disconnected', function() {
 });
 
 server.start();
+
+console.log('started');

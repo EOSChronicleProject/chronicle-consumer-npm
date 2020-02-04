@@ -79,11 +79,15 @@ class ConsumerServer extends EventEmitter {
 
         this['kConsumerServerClientConnected'] = true;
         this.chronicleConnection = socket;
-        this.emit('connected');
+        this.emit('connected', {remoteAddress: socket._socket.remoteAddress,
+                                remoteFamily: socket._socket.remoteFamily,
+                                remotePort: socket._socket.remotePort});
         
         socket.on('close', function (data) {
             this['kConsumerServerClientConnected'] = false;
-            this.emit('disconnected');
+            this.emit('disconnected', {remoteAddress: socket._socket.remoteAddress,
+                                       remoteFamily: socket._socket.remoteFamily,
+                                       remotePort: socket._socket.remotePort});
         }.bind(this));
         
         socket.on('message', function (data) {

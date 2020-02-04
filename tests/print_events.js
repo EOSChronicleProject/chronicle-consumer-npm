@@ -28,14 +28,17 @@ server.on('block', function(data) {
 
 
 server.on('tx', function(data) {
-    let msg = 'tx: ' + data.trace.id + ' ';
-    for(let i=0; i< data.trace.action_traces.length; i++) {
-        let trace = data.trace.action_traces[i];
-        if(trace.receipt.receiver == trace.act.account) {
-            msg += trace.act.name + ' ';
+    let trace = data.trace;
+    if(trace.status == 'executed') {
+        let msg = 'tx: ' + trace.id + ' ';
+        for(let i=0; i< trace.action_traces.length; i++) {
+            let atrace = trace.action_traces[i];
+            if(atrace.receipt.receiver == atrace.act.account) {
+                msg += atrace.act.name + ' ';
+            }
         }
+        console.log(msg);
     }
-    console.log(msg);
 });
 
 
@@ -101,12 +104,13 @@ server.on('ackBlock', function(bnum) {
 });
 
 
-server.on('connected', function() {
-    console.log('CONNECTED');
+server.on('connected', function(data) {
+    console.log('CONNECTED: ' + JSON.stringify(data));
 });
 
-server.on('disconnected', function() {
-    console.log('DISCONNECTED');
+server.on('disconnected', function(data) {
+    console.log('DISCONNECTED: ' + JSON.stringify(data));
 });
 
 server.start();
+console.log('started');
