@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 const WebSocket = require('ws')
 
@@ -25,6 +25,11 @@ class ConsumerServer extends EventEmitter {
             this.ackEvery = opts.ackEvery;
         }
 
+        this.interactive = false;
+        if(opts.interactive) {
+            this.interactive = true;
+        }
+        
         this.typemap = new Map();
         this.typemap.set(1001, 'fork');
         this.typemap.set(1002, 'block');
@@ -46,13 +51,27 @@ class ConsumerServer extends EventEmitter {
 
     start() {
         console.log('Starting Chronicle consumer on ' + this.wsHost + ':' + this.wsPort);
+        console.log('Acknowledging every ' + this.ackEvery + ' blocks');
 
-        this.websocket = new WebSocket.Server({ host: this.wsHost, port: this.wsPort });
-        this.websocket.on('connection', this.onConnection.bind(this));
+        this.server = new WebSocket.Server({ host: this.wsHost, port: this.wsPort });
+        this.server.on('connection', this._onConnection.bind(this));
     }
 
 
-    onConnection(socket) {
+    async requestBlocks(start, end) {
+        if(!opts.interactive) {
+            throw Error('requestBlocks can only be called in interactive mode');
+        }
+
+        if(start > end) {
+            throw Error('start block should not be lower than end');
+        }
+
+        this.chronicleConnection.send(start.toString(10) + '-' + end.toString(10));
+    }
+    
+
+    _onConnection(socket) {
         if(this['kConsumerServerClientConnected']) {
             WebSocket.abortHandshake(socket, 400);
             console.error('Rejected a new Chronicle connection because one is active already');
@@ -60,6 +79,7 @@ class ConsumerServer extends EventEmitter {
         }
 
         this['kConsumerServerClientConnected'] = true;
+        this.chronicleConnection = socket;
         
         socket.on('close', function (data) {
             this['kConsumerServerClientConnected'] = false;
@@ -85,30 +105,35 @@ class ConsumerServer extends EventEmitter {
                 if(this.unconfirmed_block - this.confirmed_block >= this.ackEvery) {
                     this.confirmed_block = block_num;
                     this.emit('ackBlock', block_num);
-                    this.ack(this.confirmed_block);
+                    this._ack(this.confirmed_block);
                 }
                 break;
                 
             case 1001:           /* FORK */
                 let block_num = msg['block_num'];
-                console.log('fork at ' + block_num);
                 this.confirmed_block = block_num - 1;
                 this.unconfirmed_block = $block_num - 1;
-                this.ack(this.confirmed_block);
+                this._ack(this.confirmed_block);
                 break;
                 
             case 1009:           /* RCVR_PAUSE */
                 if(this.unconfirmed_block > this.confirmed_block) {
                     this.confirmed_block = this.unconfirmed_block;
-                    this.ack(this.confirmed_block);
+                    this._ack(this.confirmed_block);
                 }
                 break;
             }
 
         }.bind(this));
     }
+
+    _ack(ack_block_number) {
+        if(!this.interactive) {
+            this.chronicleConnection.send(ack_block_number.toString(10));
+        }
+    }
 }
         
     
 
-module.exports = ConsumerServer;
+export {ConsumerServer};
