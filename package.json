@@ -1,0 +1,28 @@
+{
+    "name": "chronicle-consumer",
+    "version": "0.0.1",
+    "description": "Consumer module for EOSIO Chronicle",
+    "license": "MIT",
+    "author": "cc32d9 (https://github.com/cc32d9)",
+    "engines": {
+        "node": ">= 0.12.0"
+    },
+    "dependencies": {
+        "ws": "^7.2.1"
+    },
+    "main": "index.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/EOSChronicleProject/chronicle-consumer-npm.git"
+    },
+    "keywords": [
+        "eosio"
+    ],
+    "bugs": {
+        "url": "https://github.com/EOSChronicleProject/chronicle-consumer-npm/issues"
+    },
+    "homepage": "https://github.com/EOSChronicleProject/chronicle-consumer-npm#readme"
+}
