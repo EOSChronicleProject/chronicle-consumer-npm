@@ -1,8 +1,7 @@
 'use strict';
 
 const WebSocket = require('ws')
-
-import EventEmitter from 'events';
+const EventEmitter = require('events');
 
 class ConsumerServer extends EventEmitter {
 
@@ -80,15 +79,17 @@ class ConsumerServer extends EventEmitter {
 
         this['kConsumerServerClientConnected'] = true;
         this.chronicleConnection = socket;
+        this.emit('connected');
         
         socket.on('close', function (data) {
             this['kConsumerServerClientConnected'] = false;
+            this.emit('disconnected');
         }.bind(this));
         
         socket.on('message', function (data) {
             let msgType = data.readInt32LE(0);
             let opts = data.readInt32LE(4);
-            let msg = JSON.parse(data.toString('utf8', 16));
+            let msg = JSON.parse(data.toString('utf8', 8));
 
             let event = this.typemap.get(msgType);
             if(!event) {
@@ -97,22 +98,22 @@ class ConsumerServer extends EventEmitter {
 
             this.emit(event, msg);
 
-            switch (code) {
+            let block_num;
+            switch (msgType) {
                 
             case 1010:           /* BLOCK_COMPLETED */
-                let block_num = msg['block_num'];
+                block_num = msg['block_num'];
                 this.unconfirmed_block = block_num;
                 if(this.unconfirmed_block - this.confirmed_block >= this.ackEvery) {
                     this.confirmed_block = block_num;
-                    this.emit('ackBlock', block_num);
                     this._ack(this.confirmed_block);
                 }
                 break;
                 
             case 1001:           /* FORK */
-                let block_num = msg['block_num'];
+                block_num = msg['block_num'];
                 this.confirmed_block = block_num - 1;
-                this.unconfirmed_block = $block_num - 1;
+                this.unconfirmed_block = block_num - 1;
                 this._ack(this.confirmed_block);
                 break;
                 
@@ -129,6 +130,7 @@ class ConsumerServer extends EventEmitter {
 
     _ack(ack_block_number) {
         if(!this.interactive) {
+            this.emit('ackBlock', ack_block_number);
             this.chronicleConnection.send(ack_block_number.toString(10));
         }
     }
@@ -136,4 +138,4 @@ class ConsumerServer extends EventEmitter {
         
     
 
-export {ConsumerServer};
+module.exports = ConsumerServer;

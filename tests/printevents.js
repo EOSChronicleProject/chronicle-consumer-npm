@@ -28,9 +28,9 @@ server.on('block', function(data) {
 
 
 server.on('tx', function(data) {
-    let msg = 'tx: ' + data.id + ' ';
-    for(let i=0; i< data.action_traces.length; i++) {
-        let trace = data.action_traces[i];
+    let msg = 'tx: ' + data.trace.id + ' ';
+    for(let i=0; i< data.trace.action_traces.length; i++) {
+        let trace = data.trace.action_traces[i];
         if(trace.receipt.receiver == trace.act.account) {
             msg += trace.act.name + ' ';
         }
@@ -96,4 +96,17 @@ server.on('accMetadata', function(data) {
 });
 
 
+server.on('ackBlock', function(bnum) {
+    console.log('ack: ' + bnum);
+});
 
+
+server.on('connected', function() {
+    console.log('CONNECTED');
+});
+
+server.on('disconnected', function() {
+    console.log('DISCONNECTED');
+});
+
+server.start();
