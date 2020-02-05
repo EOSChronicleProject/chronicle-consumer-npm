@@ -2,12 +2,11 @@
 
 const WebSocket = require('ws')
 const EventEmitter = require('events');
+const Emittery = require('emittery');
 
-class ConsumerServer extends EventEmitter {
+class ConsumerServer {
 
     constructor(opts) {
-        super();
-
         if(!opts.port) {
             throw Error("port not defined");
         }
@@ -28,7 +27,19 @@ class ConsumerServer extends EventEmitter {
         if(opts.interactive) {
             this.interactive = true;
         }
-        
+
+        if(opts.async) {
+            this.async = true;
+            this.emitter = new Emittery();
+            this.pendingTasks = new Array();
+            this.pendingAck = Promise.resolve();
+            this.pendingAckLen = 0;
+        }
+        else {
+            this.async = false;
+            this.emitter = new EventEmitter();
+        }            
+                
         this.typemap = new Map();
         this.typemap.set(1001, 'fork');
         this.typemap.set(1002, 'block');
@@ -56,7 +67,15 @@ class ConsumerServer extends EventEmitter {
         this.server.on('connection', this._onConnection.bind(this));
     }
 
+    stop() {
+        this.server.close(0);
+    }
 
+    on(eventName, listener)    { return this.emitter.on(eventName, listener) }
+    off(eventName, listener)   { return this.emitter.off(eventName, listener) }
+    once(eventName, listener)  { return this.emitter.once(eventName, listener) }
+    
+        
     async requestBlocks(start, end) {
         if(!opts.interactive) {
             throw Error('requestBlocks can only be called in interactive mode');
@@ -79,15 +98,15 @@ class ConsumerServer extends EventEmitter {
 
         this['kConsumerServerClientConnected'] = true;
         this.chronicleConnection = socket;
-        this.emit('connected', {remoteAddress: socket._socket.remoteAddress,
-                                remoteFamily: socket._socket.remoteFamily,
+        this.emitter.emit('connected', {remoteAddress: socket._socket.remoteAddress,
+                                        remoteFamily: socket._socket.remoteFamily,
                                 remotePort: socket._socket.remotePort});
         
         socket.on('close', function (data) {
             this['kConsumerServerClientConnected'] = false;
-            this.emit('disconnected', {remoteAddress: socket._socket.remoteAddress,
-                                       remoteFamily: socket._socket.remoteFamily,
-                                       remotePort: socket._socket.remotePort});
+            this.emitter.emit('disconnected', {remoteAddress: socket._socket.remoteAddress,
+                                               remoteFamily: socket._socket.remoteFamily,
+                                               remotePort: socket._socket.remotePort});
         }.bind(this));
         
         socket.on('message', function (data) {
@@ -100,9 +119,13 @@ class ConsumerServer extends EventEmitter {
                 throw Error('Unknown msgType: ' + msgType);
             }
 
-            this.emit(event, msg);
+            let res = this.emitter.emit(event, msg);
+            if(this.async) {
+                this.pendingTasks.push(res);
+            }
 
             let block_num;
+            let do_ack = false;
             switch (msgType) {
                 
             case 1010:           /* BLOCK_COMPLETED */
@@ -110,7 +133,7 @@ class ConsumerServer extends EventEmitter {
                 this.unconfirmed_block = block_num;
                 if(this.unconfirmed_block - this.confirmed_block >= this.ackEvery) {
                     this.confirmed_block = block_num;
-                    this._ack(this.confirmed_block);
+                    do_ack = true;
                 }
                 break;
                 
@@ -118,23 +141,49 @@ class ConsumerServer extends EventEmitter {
                 block_num = msg['block_num'];
                 this.confirmed_block = block_num - 1;
                 this.unconfirmed_block = block_num - 1;
-                this._ack(this.confirmed_block);
+                do_ack = true;
                 break;
                 
             case 1009:           /* RCVR_PAUSE */
                 if(this.unconfirmed_block > this.confirmed_block) {
                     this.confirmed_block = this.unconfirmed_block;
-                    this._ack(this.confirmed_block);
+                    do_ack = true;
                 }
                 break;
             }
-
+            
+            if(do_ack) {
+                if(this.async) {
+                    this.pendingAck = this.pendingAck.then(this._async_ack(this.confirmed_block));
+                }
+                else {
+                    this._sync_ack(this.confirmed_block);
+                }
+            }
         }.bind(this));
     }
 
-    _ack(ack_block_number) {
+    _async_ack(ack_block_number) {
         if(!this.interactive) {
-            this.emit('ackBlock', ack_block_number);
+            let tasks = this.pendingTasks;
+            this.pendingTasks = new Array();
+            this.pendingAckLen++;
+            // console.log('Pending acks: ' + this.pendingAckLen);
+            // console.log('Pending tasks: ' + tasks.length);
+            
+            return Promise.all(tasks)
+                .then(this.emitter.emit('ackBlock', ack_block_number))
+                .then(() => {
+                    this.chronicleConnection.send(ack_block_number.toString(10));
+                    this.pendingAckLen--;
+                })
+                .then(this.pendingAck);
+        }
+    }
+
+    _sync_ack(ack_block_number) {
+        if(!this.interactive) {
+            this.emitter.emit('ackBlock', ack_block_number);
             this.chronicleConnection.send(ack_block_number.toString(10));
         }
     }

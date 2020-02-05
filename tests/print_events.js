@@ -7,12 +7,14 @@ program
     .option('--host [value]', 'Binding address', '0.0.0.0')
     .option('--port [value]', 'Websocket server port', '8855')
     .option('--ack [value]', 'Ack every X blocks', '10')
+    .option('--async', 'Run asynchronous emitter')
     .parse(process.argv);
 
 
 const server = new ConsumerServer({host: program.host,
                                    port: program.port,
-                                   ackEvery: program.ack});
+                                   ackEvery: program.ack,
+                                   async: program.async});
 
 
 server.on('fork', function(data) {

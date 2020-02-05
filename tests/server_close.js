@@ -23,53 +23,25 @@ server.on('fork', function(data) {
 });
 
 
-
-
-server.on('tx', function(data) {
-    let tx_printed = false;
-    let trace = data.trace;
-    if(trace.status == 'executed') {
-        for(let i=0; i< trace.action_traces.length; i++) {
-            let atrace = trace.action_traces[i];
-            if(atrace.receipt.receiver == atrace.act.account) {
-                if(atrace.act.name == 'transfer') {
-                    if(!tx_printed) {
-                        console.log('tx: ' + trace.id);
-                        tx_printed = true;
-                    }
-                    let d = atrace.act.data;
-                    console.log(' ' + atrace.act.account + ' ' +
-                                d.from + '->' +
-                                d.to + ': ' +
-                                d.quantity);
-                }           
-            }
-        }
-    }
-});
-
-
-
 server.on('blockCompleted', function(data) {
     let block_num = data['block_num'];
     console.log('block completed: ' + block_num);
 });
-
-
 
 server.on('ackBlock', function(bnum) {
     console.log('ack: ' + bnum);
 });
 
 
-server.on('connected', function() {
-    console.log('CONNECTED');
+server.on('connected', function(data) {
+    console.log('CONNECTED: ' + JSON.stringify(data));
 });
 
-server.on('disconnected', function() {
-    console.log('DISCONNECTED');
+server.on('disconnected', function(data) {
+    console.log('DISCONNECTED: ' + JSON.stringify(data));
 });
 
 server.start();
-
 console.log('started');
+
+setTimeout(function() { server.stop() }, 10000);

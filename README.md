@@ -38,6 +38,12 @@ npm install chronicle-consumer
 
 ## Usage
 
+Chronicle sets a default number of unacknowledged blocks to 1000,
+which due to asynchronous manner of nodejs will generate a large queue
+of pending messages within the nodejs process. It is recommended to
+use a lower value in Chronicle configuration, such as
+`exp-ws-max-unack = 200`.
+
 The module defines an event emitter class, and your application
 subscribes to events of interest.
 
@@ -45,6 +51,23 @@ The consumer process opens a Websocket server on a specified port, and
 this server accepts only one connection from Chronicle. If you need to
 process multiple streams of Chronicle data, you need to create
 multiple server instances using different TCP port numbers.
+
+The module allows one of two modes of operation: synchronous and
+asynchronous. Default mode is synchronous, so that events are emitted
+synchronously and are not expected to fire any asynchronous tasks.
+
+In asynchronous mode, event handlers are expected to return promise
+objects which would eventually resolve. The handler of `ackBlock`
+event should return a promise that resolves when all asynchronous
+tasks resolve. See `tests/async_slow.js` for a reference.
+
+If asynchronous processing is potentially taking a significant time,
+such as writing to a slow database, the nodejs process may run out of
+memory due to too many pending requests. In this case, it is
+recommended to specify a higher memory limits in nodejs process, as
+follows: `node --max-old-space-size=4096 app.js`.
+
+Synchronous mode:
 
 ```
 const ConsumerServer = require('chronicle-consumer');
@@ -82,6 +105,61 @@ server.on('tx', function(data) {
 server.start();
 ```
 
+Asynchronous mode, with random timers:
+
+```
+const ConsumerServer = require('chronicle-consumer');
+
+function _delay() {return Math.floor(Math.random()*10000);}
+
+const setTimeoutPromise = util.promisify(setTimeout);
+
+var pendingTasks = new Array();
+
+const server = new ConsumerServer({port: 8899, async: true});
+
+server.on('fork', function(data) {
+    let block_num = data['block_num'];
+    console.log('fork: ' + block_num);
+    
+    return Promise.all(pendingTasks).then(() => {
+        pendingTasks = new Array();
+        console.log('fork: ' + block_num + ' all pending tasks finished');
+    });
+});
+
+server.on('tx', function(data) {
+    pendingTasks.push(setTimeoutPromise(_delay(), data).then((data) => {
+        let trace = data.trace;
+        if(trace.status == 'executed') {
+            let msg = 'tx: ' + trace.id + ' ';
+            for(let i=0; i< trace.action_traces.length; i++) {
+                let atrace = trace.action_traces[i];
+                if(atrace.receipt.receiver == atrace.act.account) {
+                    msg += atrace.act.name + ' ';
+                }
+            }
+            console.log(msg);
+        }
+    }));
+});
+
+server.on('blockCompleted', function(data) {
+    pendingTasks.push(setTimeoutPromise(_delay(), data).then((data) => {
+        console.log('block completed: ' + data['block_num']);
+    }));
+});
+
+server.on('ackBlock', function(bnum) {
+    console.log('ack: ' + bnum);
+    return Promise.all(pendingTasks).then(() => {
+        pendingTasks = new Array();
+        console.log('ack: ' + bnum + ' all pending tasks finished');
+    });
+});
+```
+
+
 ## Constructor
 
 The constructor takes an object representing options for the
@@ -96,16 +174,20 @@ applicable.
 `ackEvery` defines how frequently the process sends acknowledgements
 to Chronicle, in blocks. All blocks that have not been acknowledged
 are discarded by Chronicle on next restart. By default, Chronicle
-pauses sendoiong the data if 1000 bloicks have not been
+pauses sending the data as soon as 1000 blocks have not been
 acknowledged. It's not recommended to set `ackEvery` too low, as it
 adds overhead in processing. Values of 10 to 100 are
-reasonable. Default value is 100.
+reasonable. Default value is 100. It is also recommended to lower the
+default setting in Chronicle, such as `exp-ws-max-unack = 200`.
 
 `interactive`, if set to `true`, turns the consumer in nteractive
 mode. Correspondingly, Chronicle process should also be started in
 interactive mode. In this mode, instead of a constant stream of
 blo0ckchain data, the process needs to request a block range from
 Chronicle, by using `async requestBlocks(start, end)` method.
+
+`async`, if set to `true`, the emitter works in asynchronous mode
+(using Emittery module).
 
 The constructor does not start the websocket server. Once you
 subscribe to events using `on` method, you need to call the `start()`
@@ -117,30 +199,35 @@ method.
 The `start()` method creates a websocket server that should listen on
 the specified TCP port.
 
+## `stop()`
+
+This method closes the websocket server.
+
 ## `async requestBlocks(start, end)`
 
 The method is only applicable to interactive mode, and it requests a
-range of blocks from Chronicle. the process does not need to wait for
+range of blocks from Chronicle. The process does not need to wait for
 full delivery of block data, and multiple ranges can be requested in a
 row.
 
 
 ## Events
 
-All events are emitted synhronously, in order to guarantee the exactly
-the same order of execution as transactions are executed on the
-blockchain.
+In synchronous mode, all events are emitted sequentially, in order to
+guarantee the exactly the same order of execution as transactions are
+executed on the blockchain.
+
+In asynchronous mode, the order of execution cannot be guaranteed, so
+the program should take into account that transactions and table
+deltas will be mixed up between the blocks and within each block. Also
+`blockCompleted` event, although emitted, does not have any sense in
+asynchronous mode.
 
 It is important to understand the workflow: the consumer process
 acknowledges block numbers to Chronicle, and it must acknowledge only
 the blocks that have been properly processed. If the data is written
 to a database, all data needs to be committed prior to sending the
 acknowledgement.
-
-The application may fire up asynchronous processing of events as they
-get emitted, for better efficiency. In this case, it must make sure to
-process the 'ackBlock' event and commit all data to nonvolatile memory
-prior to returning from the event handler.
 
 It is also important to understand forks in EOSIO blockchains: due to
 geographical distance and network conditions, the handover between
@@ -176,6 +263,9 @@ Upon receiving a `fork` event, the application must erase all
 previously received data for the fork block and all blocks past
 it. Subsequent events will have the new data for the block number that
 was indicated in the fork event.
+
+In asynchronous mode, the event handler must return a promise that
+resolves when the data cleanup finishes.
 
 
 ### Event: `block`
@@ -287,9 +377,12 @@ The application normally does not need to subscribe to this event.
 
 ### Event: `blockCompleted`
 
-This is the last in the sequence of events that are emitted for a
-specific block number. It is guaranteed that there will not be new
-events for this block, unless there is a fork.
+In synchronous mode, this is the last in the sequence of events that
+are emitted for a specific block number. It is guaranteed that there
+will not be new events for this block, unless there is a fork.
+
+In asynchronous mode this event does not make any sense, and the
+application is not expected to subscribe to it.
 
 Data fields:
 
@@ -321,10 +414,15 @@ new smart contract code is uploaded, or the code was deleted.
 ### Event: `ackBlock`
 
 The event data is the block number that is about to be acknowledged
-back to Chronicle. If the program performs any asynchronous
-processing, it needs to wait until the asynchronous calls finish and
-the data is stored to nonvolatile memory if needed, and then exit from
-event handler.
+back to Chronicle.
+
+In synchronous mode, the application should commit all written data to
+nonvolatile storage (or commit data to an SQL server and finish a
+transaction).
+
+In asynchronous mode, the handler should return a promise that
+resolves only when all the previously received data is processed and
+committed.
 
 ### Events: `connected`, `disconnected`
 
