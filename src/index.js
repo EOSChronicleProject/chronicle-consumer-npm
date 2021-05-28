@@ -94,8 +94,8 @@ class ConsumerServer {
       } catch (err) {
         console.error('Graceful close of websocket threw error', err);
       } finally {
-        this['kConsumerServerClientConnected'] = false;
         if (emitDisconnect) {
+          this['kConsumerServerClientConnected'] = false;
           this.emitter.emit('disconnected', {remoteAddress: socket._socket.remoteAddress,
             remoteFamily: socket._socket.remoteFamily,
             remotePort: socket._socket.remotePort});
