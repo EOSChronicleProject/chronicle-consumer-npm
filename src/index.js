@@ -88,26 +88,42 @@ class ConsumerServer {
         this.chronicleConnection.send(start.toString(10) + '-' + end.toString(10));
     }
     
-
+    closeHandler(socket, emitDisconnect = true) {
+      try {
+        socket.close();
+      } catch (err) {
+        console.error('Graceful close of websocket threw error', err);
+      } finally {
+        this['kConsumerServerClientConnected'] = false;
+        if (emitDisconnect) {
+          this.emitter.emit('disconnected', {remoteAddress: socket._socket.remoteAddress,
+            remoteFamily: socket._socket.remoteFamily,
+            remotePort: socket._socket.remotePort});
+        }
+      }
+    }
+  
     _onConnection(socket) {
         if(this['kConsumerServerClientConnected']) {
-            WebSocket.abortHandshake(socket, 400);
             console.error('Rejected a new Chronicle connection because one is active already');
-            return;
+            return this.closeHandler(socket, false);
         }
 
         this['kConsumerServerClientConnected'] = true;
         this.chronicleConnection = socket;
         this.emitter.emit('connected', {remoteAddress: socket._socket.remoteAddress,
                                         remoteFamily: socket._socket.remoteFamily,
-                                remotePort: socket._socket.remotePort});
+                                        remotePort: socket._socket.remotePort});
         
-        socket.on('close', function (data) {
-            this['kConsumerServerClientConnected'] = false;
-            this.emitter.emit('disconnected', {remoteAddress: socket._socket.remoteAddress,
-                                               remoteFamily: socket._socket.remoteFamily,
-                                               remotePort: socket._socket.remotePort});
-        }.bind(this));
+        socket.on('close', () => {
+          console.log('Graceful close of Chronicle connection initiated');
+          this.closeHandler(socket);
+        });
+
+        socket.on('error', () => {
+          console.error('Error close of Chronicle connection initiated');
+          this.closeHandler(socket);
+        });
         
         socket.on('message', function (data) {
             let msgType = data.readInt32LE(0);
