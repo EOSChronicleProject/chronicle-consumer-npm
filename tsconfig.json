@@ -1,0 +1,10 @@
+{
+  "extends": "@tsconfig/recommended/tsconfig.json",
+  "include": ["src", "types"],      
+  "compilerOptions": {
+    "moduleResolution": "node",
+    "esModuleInterop": true,    
+    "module": "ESNext",
+    "noImplicitAny": false
+  }
+}
