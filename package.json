@@ -1,32 +1,68 @@
 {
-    "name": "chronicle-consumer",
-    "version": "0.0.4",
-    "description": "Consumer module for EOSIO Chronicle",
-    "license": "MIT",
-    "author": "cc32d9 (https://github.com/cc32d9)",
-    "engines": {
-        "node": ">= 0.12.0"
+  "name": "chronicle-consumer",
+  "version": "0.0.4",
+  "description": "Consumer module for EOSIO Chronicle",
+  "license": "MIT",
+  "author": "cc32d9 (https://github.com/cc32d9)",
+  "main": "dist/index.js",
+  "module": "dist/chronicle-consumer.esm.js",
+  "typings": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "analyze": "size-limit --why",
+    "build": "dts build",
+    "lint": "dts lint",
+    "prepare": "dts build",
+    "size": "size-limit",
+    "start": "dts watch",
+    "test": "dts test"
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "dts lint"
+    }
+  },
+  "prettier": {
+    "printWidth": 80,
+    "semi": true,
+    "singleQuote": true,
+    "trailingComma": "es5"
+  },
+  "jest": {
+    "testEnvironment": "node"
+  },
+  "peerDependencies": {},
+  "engines": {
+    "node": ">=12"
+  },
+  "size-limit": [
+    {
+      "path": "dist/chronicle-consumer.cjs.production.min.js",
+      "limit": "10 KB"
     },
-    "dependencies": {
-        "emittery": "^0.5.1",
-        "ws": "^7.4.6"
-    },
-    "devDependencies": {
-        "commander": "^2.19.0"
-    },
-    "main": "src/index.js",
-    "scripts": {
-        "test": "echo \"Error: no test specified\" && exit 1"
-    },
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/EOSChronicleProject/chronicle-consumer-npm.git"
-    },
-    "keywords": [
-        "eosio"
-    ],
-    "bugs": {
-        "url": "https://github.com/EOSChronicleProject/chronicle-consumer-npm/issues"
-    },
-    "homepage": "https://github.com/EOSChronicleProject/chronicle-consumer-npm#readme"
+    {
+      "path": "dist/chronicle-consumer.esm.js",
+      "limit": "10 KB"
+    }
+  ],
+  "devDependencies": {
+    "@size-limit/preset-small-lib": "^8.0.1",
+    "@tsconfig/recommended": "^1.0.1",
+    "@types/ws": "^8.5.3",
+    "@typescript-eslint/eslint-plugin": "^5.34.0",
+    "@typescript-eslint/parser": "^5.34.0",
+    "dts-cli": "^1.6.0",
+    "eslint": "^8.22.0",
+    "husky": "^8.0.1",
+    "size-limit": "^8.0.1",
+    "tslib": "^2.4.0",
+    "typescript": "^4.7.4"
+  },
+  "dependencies": {
+    "emittery": "^0.12.1",
+    "ws": "^8.8.1"
+  }
 }
