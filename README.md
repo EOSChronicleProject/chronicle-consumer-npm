@@ -30,6 +30,7 @@ repository](https://github.com/EOSChronicleProject/chronicle-consumer-npm-exampl
 provide practical examples on using the library.
 
 
+
 ## Installing
 
 ```
@@ -435,6 +436,29 @@ object with fields as follows:
 * `remotePort`: TCP port number of remote side.
 
 
+## Building
+
+Building a new module from sources on Ubuntu
+
+```
+apt install -y curl
+
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+sudo npm install -g typescript
+
+curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -
+echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
+
+sudo apt update && sudo apt install -y --no-install-recommends yarn
+
+git clone https://github.com/EOSChronicleProject/chronicle-consumer-npm.git /opt/src/chronicle-consumer-npm
+cd /opt/src/chronicle-consumer-npm
+
+yarn install
+yarn run build
+```
 
 
 
