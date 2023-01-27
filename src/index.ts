@@ -9,21 +9,20 @@ type EmitterType = {
   type: 'async'
   adapter: Emittery
 }
+
 class ConsumerServer<T extends WebSocket = WebSocket> {
   private wsPort: number;
   private wsHost: string
   private ackEvery: number;
   private interactive: boolean;
   private async: boolean;
-  private emitter: EmitterType; // Emittery or EventEmitter   
-  private typemap = new Map<number, string>(); // @TODO: narrow down the values 
+  private emitter: EmitterType; // Emittery or EventEmitter
+  private typemap = new Map<number, string>(); // @TODO: narrow down the values
   private confirmed_block: number;
   private unconfirmed_block: number;
   private server?: WebSocket.Server<T>;
   private chronicleConnection?: T
-  private asyncTasksInProcessingCounter = 0;
-  private asyncMaxTasksThreshold: number | undefined;
-
+  private tasksQueue = new Array();
 
   constructor(opts: {
     port: number,
@@ -31,7 +30,6 @@ class ConsumerServer<T extends WebSocket = WebSocket> {
     ackEvery?: number
     interactive?: boolean
     async?: boolean
-    asyncMaxTasksThreshold?: number
   }) {
     if (!opts.port) {
       throw Error("port not defined");
@@ -59,11 +57,6 @@ class ConsumerServer<T extends WebSocket = WebSocket> {
       this.emitter = {
         type: 'async',
         adapter: new Emittery()
-      }
-      if (opts.asyncMaxTasksThreshold) {
-        this.asyncMaxTasksThreshold = opts.asyncMaxTasksThreshold;
-      } else {
-        throw new Error("must define `asyncMaxTasksThreshold` in async mode")
       }
     } else {
       this.async = false;
@@ -174,23 +167,9 @@ class ConsumerServer<T extends WebSocket = WebSocket> {
         throw Error('Unknown msgType: ' + msgType);
       }
 
-      const res = this.emitter.adapter.emit(event, msg);
+      const emit_res = this.emitter.adapter.emit(event, msg);
       if (this.async) {
-        if (typeof res === 'boolean') throw new Error("in async mode res should be a promise, not boolean")
-
-        // once promise comes in -- increment the counter
-        this.asyncTasksInProcessingCounter++;
-        // console.log("tasksTracker: consumerModule: counter incr: event+traceId:", `${event}+${msg?.trace?.id}`)
-        res.finally(() => {
-          // console.log("tasksTracker: consumerModule: counter decr: event+traceId:", `${event}+${msg?.trace?.id}`)
-          // once promise is resolved -- decrement the counter
-          if (this.asyncTasksInProcessingCounter === this.asyncMaxTasksThreshold) {
-            // if going below threshold, enforce ack
-            // console.log("enforcing ack signal because threshold surpassed")
-            this._async_ack(this.confirmed_block);
-          }
-          this.asyncTasksInProcessingCounter--;
-        });
+        this.tasksQueue.push(emit_res);
       }
 
       let block_num;
@@ -214,19 +193,11 @@ class ConsumerServer<T extends WebSocket = WebSocket> {
           break;
       }
 
-      if (do_ack) {
+      if (do_ack && !this.interactive) {
         if (this.async) {
-
-          if (!this.asyncMaxTasksThreshold) throw new Error("asyncMaxTasksThreshold must be defined in async mode")
-
-          if (this.asyncTasksInProcessingCounter >= this.asyncMaxTasksThreshold) {
-            // console.log("received ack signal but not sending ack, because threshold not passed: this.asyncTasksInProcessingCounter >= this.asyncMaxTasksThreshold", `${this.asyncTasksInProcessingCounter} >= ${this.asyncMaxTasksThreshold}`)
-            return;
-          } else {
-            // console.log("received ack signal and sending ack, because threshold passed: this.asyncTasksInProcessingCounter >= this.asyncMaxTasksThreshold", `${this.asyncTasksInProcessingCounter} >= ${this.asyncMaxTasksThreshold}`)
-          }
-          // if we're here, then we're ready to send ack
-          this._async_ack(this.confirmed_block);
+          const ack_task = this._async_ack(this.confirmed_block, this.tasksQueue);
+          this.tasksQueue = new Array();
+          this.tasksQueue.push(ack_task);
         }
         else {
           this._sync_ack(this.confirmed_block);
@@ -235,32 +206,27 @@ class ConsumerServer<T extends WebSocket = WebSocket> {
     });
   }
 
-  async _async_ack(ack_block_number) {
-    if (!this.chronicleConnection) throw new Error('chronicleConnection must be defined')
-
-    if (!this.interactive) {
-      if (this.emitter.type !== 'async') throw new Error('emitter type must be async')
-
-      try {
-        await this.emitter.adapter.emit('ackBlock', ack_block_number);
-        this.chronicleConnection.send(ack_block_number.toString(10));
-      } catch (e) {
-        console.error('critical error: ackBlock listener threw error')
-      }
-
-    }
+  async _async_ack(ack_block_number, tasks) {
+    await Promise.all(tasks);
+    await this.emitter.adapter.emit('ackBlock', ack_block_number);
+    this.chronicleConnection?.send(ack_block_number.toString(10));
   }
 
   _sync_ack(ack_block_number) {
-    if (!this.chronicleConnection) throw new Error('chronicleConnection must be defined')
-
-    if (!this.interactive) {
-      this.emitter.adapter.emit('ackBlock', ack_block_number);
-      this.chronicleConnection.send(ack_block_number.toString(10));
-    }
+    this.emitter.adapter.emit('ackBlock', ack_block_number);
+    this.chronicleConnection?.send(ack_block_number.toString(10));
   }
 }
 
 
 
 module.exports = ConsumerServer;
+
+
+/*
+ Local Variables:
+ mode: javascript
+ js-indent-level: 2
+ indent-tabs-mode: nil
+ End:
+*/
