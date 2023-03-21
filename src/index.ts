@@ -91,12 +91,16 @@ class ConsumerServer<T extends WebSocket = WebSocket> {
     console.log('Starting Chronicle consumer on ' + this.wsHost + ':' + this.wsPort);
     console.log('Acknowledging every ' + this.ackEvery + ' blocks');
 
-    this.server = new WebSocket.Server({ host: this.wsHost, port: this.wsPort });
+    this.server = new WebSocket.Server({ host: this.wsHost, port: this.wsPort, clientTracking: true });
     this.server.on('connection', this._onConnection.bind(this));
   }
 
   stop() {
     this.server?.close();
+    this.server?.clients?.forEach((c) => {
+      c.terminate();
+    });
+    console.log('Stopped Chronicle consumer on ' + this.wsHost + ':' + this.wsPort);
   }
 
   on(eventName, listener) { return this.emitter.adapter.on(eventName, listener) }
