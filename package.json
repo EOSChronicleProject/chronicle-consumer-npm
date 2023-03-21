@@ -1,6 +1,6 @@
 {
   "name": "chronicle-consumer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Consumer module for EOSIO Chronicle",
   "license": "MIT",
   "author": "cc32d9 (https://github.com/cc32d9)",
@@ -63,6 +63,6 @@
   },
   "dependencies": {
     "emittery": "^0.12.1",
-    "ws": "^8.8.1"
+    "ws": "^8.13.0"
   }
 }
