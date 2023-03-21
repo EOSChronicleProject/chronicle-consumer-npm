@@ -22,61 +22,48 @@ const server = new ConsumerServer({host: program.host,
 
 const setTimeoutPromise = util.promisify(setTimeout);
 
-var pendingTasks = new Array();
+let acked_block = 0;
 
 server.on('fork', function(data) {
     let block_num = data['block_num'];
-    console.log('fork: ' + block_num);
-    
-    return Promise.all(pendingTasks).then(() => {
-        pendingTasks = new Array();
-        console.log('fork: ' + block_num + ' all pending tasks finished');
-    });
+    console.log('fork: ' + block_num + ' *');
 });
 
 
 
 server.on('tx', function(data) {
-    pendingTasks.push(setTimeoutPromise(_delay(), data).then((data) => {
-        let trace = data.trace;
-        if(trace.status == 'executed') {
-            let msg = 'tx: ' + trace.id + ' ';
-            for(let i=0; i< trace.action_traces.length; i++) {
-                let atrace = trace.action_traces[i];
-                if(atrace.receipt.receiver == atrace.act.account) {
-                    msg += atrace.act.name + ' ';
-                }
-            }
-            console.log(msg);
+    return setTimeoutPromise(_delay(), data).then((data) => {
+        if( data.block_num <= acked_block ) {
+            console.error('acked too early: ' + acked_block);
+            process.exit(1);
         }
-    }));
+    });
 });
+
 
 
 server.on('tableRow', function(data) {
-    pendingTasks.push(setTimeoutPromise(_delay(), data).then((data) => {
-        console.log('row ' + (data.added?'added':'removed') + ': ' +
-                    data.kvo.code + ' ' + data.kvo.scope + ' ' + data.kvo.table + ' ' +
-                    data.kvo.primary_key);
-    }));
+    return setTimeoutPromise(_delay(), data).then((data) => {
+        if( data.block_num <= acked_block ) {
+            console.error('acked too early: ' + acked_block);
+            process.exit(1);
+        }
+    });
 });
 
 
 
-          
+
 
 server.on('pause', function(data) {
-    let block_num = data['block_num'];
+    let block_num = data['head'];
     console.log('pause: ' + block_num);
 });
 
 
 server.on('ackBlock', function(bnum) {
-    console.log('ack: ' + bnum);
-    return Promise.all(pendingTasks).then(() => {
-        pendingTasks = new Array();
-        console.log('ack: ' + bnum + ' all pending tasks finished');
-    });
+    acked_block = bnum;
+    console.log('ack: ' + bnum + ' queue: ' + server.tasksQueue.length);
 });
 
 
