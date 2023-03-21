@@ -98,7 +98,7 @@ class ConsumerServer<T extends WebSocket = WebSocket> {
   stop() {
     this.server?.close();
     this.server?.clients?.forEach((c) => {
-      c.terminate();
+      c.close();
     });
     console.log('Stopped Chronicle consumer on ' + this.wsHost + ':' + this.wsPort);
   }
