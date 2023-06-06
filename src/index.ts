@@ -82,6 +82,7 @@ class ConsumerServer<T extends WebSocket = WebSocket> {
     this.typemap.set(1011, 'permission');
     this.typemap.set(1012, 'permissionLink');
     this.typemap.set(1013, 'accMetadata');
+    this.typemap.set(1014, 'blockStarted');
 
     this.confirmed_block = 0;
     this.unconfirmed_block = 0;
